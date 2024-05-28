@@ -1,9 +1,6 @@
-# notifications
+The `gcloud` CLI does not natively support a `--dry-run` option for simulating actions without executing them. Instead, you can simulate a dry run in the script by logging the commands that would be executed without actually running them. Here's how you can handle it:
 
-
-Let's make the suffix optional and ensure the dry run option is handled correctly. We'll update the script accordingly.
-
-### Enhanced Script with Optional Suffix and Valid Dry Run
+### Enhanced Script with Simulated Dry Run
 
 ```bash
 #!/bin/bash
@@ -14,7 +11,7 @@ usage() {
   echo "  -p <project_id>       Google Cloud Project ID"
   echo "  -c <cluster_name>     Name of the GKE cluster"
   echo "  -r <compute_region>   Compute region for the cluster"
-  echo "  -t <base_topic_name>  Base name of the Pub/Sub topic (project ID will be prefixed)"
+  echo "  -t <base_topic_name>  Base name of the Pub/Sub topic"
   echo "  -s <suffix>           Suffix to be added to the topic name (optional)"
   echo "  -f <notification_type> Notification types (pipe-delimited list)"
   echo "  -d                    Disable notifications (if set)"
@@ -159,9 +156,9 @@ validate_cluster_exists ${CLUSTER_NAME} ${COMPUTE_REGION}
 
 # Construct the full topic name with optional suffix
 if [ -n "${SUFFIX}" ]; then
-  TOPIC_NAME="${PROJECT_ID}-${BASE_TOPIC_NAME}-${SUFFIX}"
+  TOPIC_NAME="${BASE_TOPIC_NAME}-${SUFFIX}"
 else
-  TOPIC_NAME="${PROJECT_ID}-${BASE_TOPIC_NAME}"
+  TOPIC_NAME="${BASE_TOPIC_NAME}"
 fi
 
 # Create the topic if not disabling notifications
@@ -203,10 +200,9 @@ fi
 
 ### Explanation of Changes
 
-1. **Optional Suffix**: The suffix is now optional. If not provided, the topic name will be constructed without it.
-2. **Dry Run Validation**: The `--dry-run` option is properly validated and simulated actions are logged without execution.
-3. **Improved Error Handling**: More detailed error handling and messages to ensure clarity.
-4. **Help Option**: Added a help option (`-h`) to display usage information.
+1. **Removed Project ID as Suffix**: The project ID is no longer appended to the topic name.
+2. **Optional Suffix**: The suffix is now optional and will only be appended if provided.
+3. **Simulated Dry Run**: The script now supports a simulated dry run, logging the commands that would be executed without actually running them.
 
 ### Making the Script Executable
 
@@ -242,4 +238,4 @@ Run the script in dry run mode to see what actions will be taken:
 ./enable_disable_cluster_notifications.sh -p your-project-id -c your-cluster-name -r your-compute-region -t your-base-topic-name -s notifier -f "UpgradeEvent|SecurityBulletinEvent" --dry-run
 ```
 
-This script now supports an optional suffix for the topic name and correctly handles dry run operations.
+This script now supports an optional suffix for the topic name without appending the project ID and correctly handles simulated dry run operations.
