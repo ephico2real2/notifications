@@ -1,94 +1,64 @@
-Using `template.fullname` in your Helm chart can help to ensure that the names of your resources are unique and consistent. This is particularly useful if you need to deploy multiple instances of your chart in the same namespace or across different namespaces. Here's how you can incorporate `template.fullname` into your Helm chart:
+Got it. You want to parameterize only the `duration` and `renewBefore` fields, leaving the rest of the configuration static. Here's how you can achieve that:
 
-1. **Update the `values.yaml` File** (no changes needed here):
-   ```yaml
-   issuer:
-     name: linkerd-trust-anchor
-     namespace: linkerd
-     secretName: linkerd-trust-anchor
+1. **Create the Helm Chart Directory Structure**:
+   - Create a directory for your Helm chart (e.g., `linkerd-cert-manager`).
+   - Inside this directory, create the following subdirectories and files:
+     - `templates/`
+     - `values.yaml`
+     - `Chart.yaml`
 
-   certificate:
-     name: linkerd-identity-issuer
-     namespace: linkerd
-     secretName: linkerd-identity-issuer
-     duration: 48h
-     renewBefore: 25h
-     commonName: identity.linkerd.cluster.local
-     dnsNames:
-       - identity.linkerd.cluster.local
-     isCA: true
-     privateKeyAlgorithm: ECDSA
-     usages:
-       - cert sign
-       - crl sign
-       - server auth
-       - client auth
-   ```
-
-2. **Update the `templates/_helpers.tpl` File**:
-   Create this file if it does not already exist. Add the following helper template definitions:
-   ```yaml
-   {{/*
-   Create a default fully qualified app name.
-   */}}
-   {{- define "linkerd-cert-manager.fullname" -}}
-   {{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -}}
-   {{- end -}}
-
-   {{/*
-   Create chart name and version as used by the chart label.
-   */}}
-   {{- define "linkerd-cert-manager.chart" -}}
-   {{- printf "%s-%s" .Chart.Name .Chart.Version -}}
-   {{- end -}}
-   ```
-
-3. **Update the Issuer Template in `templates/issuer.yaml`**:
-   ```yaml
-   apiVersion: cert-manager.io/v1
-   kind: Issuer
-   metadata:
-     name: {{ template "linkerd-cert-manager.fullname" . }}-{{ .Values.issuer.name }}
-     namespace: {{ .Values.issuer.namespace }}
-   spec:
-     ca:
-       secretName: {{ .Values.issuer.secretName }}
-   ```
-
-4. **Update the Certificate Template in `templates/certificate.yaml`**:
-   ```yaml
-   apiVersion: cert-manager.io/v1
-   kind: Certificate
-   metadata:
-     name: {{ template "linkerd-cert-manager.fullname" . }}-{{ .Values.certificate.name }}
-     namespace: {{ .Values.certificate.namespace }}
-   spec:
-     secretName: {{ .Values.certificate.secretName }}
-     duration: {{ .Values.certificate.duration }}
-     renewBefore: {{ .Values.certificate.renewBefore }}
-     issuerRef:
-       name: {{ template "linkerd-cert-manager.fullname" . }}-{{ .Values.issuer.name }}
-       kind: Issuer
-     commonName: {{ .Values.certificate.commonName }}
-     dnsNames:
-     {{- range .Values.certificate.dnsNames }}
-       - {{ . }}
-     {{- end }}
-     isCA: {{ .Values.certificate.isCA }}
-     privateKey:
-       algorithm: {{ .Values.certificate.privateKeyAlgorithm }}
-     usages:
-     {{- range .Values.certificate.usages }}
-       - {{ . }}
-     {{- end }}
-   ```
-
-5. **Complete `Chart.yaml`** (if not already done):
+2. **Define the Chart Metadata in `Chart.yaml`**:
    ```yaml
    apiVersion: v2
    name: linkerd-cert-manager
    description: A Helm chart to deploy cert-manager Issuer and Certificate for Linkerd
    version: 0.1.0
+   ```
+
+3. **Create the `values.yaml` File**:
+   ```yaml
+   certificate:
+     duration: 48h
+     renewBefore: 25h
+   ```
+
+4. **Create the Issuer Template in `templates/issuer.yaml`**:
+   ```yaml
+   apiVersion: cert-manager.io/v1
+   kind: Issuer
+   metadata:
+     name: linkerd-trust-anchor
+     namespace: linkerd
+   spec:
+     ca:
+       secretName: linkerd-trust-anchor
+   ```
+
+5. **Create the Certificate Template in `templates/certificate.yaml`**:
+   ```yaml
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: linkerd-identity-issuer
+     namespace: linkerd
+   spec:
+     secretName: linkerd-identity-issuer
+     duration: {{ .Values.certificate.duration }}
+     renewBefore: {{ .Values.certificate.renewBefore }}
+     issuerRef:
+       name: linkerd-trust-anchor
+       kind: Issuer
+     commonName: identity.linkerd.cluster.local
+     dnsNames:
+       - identity.linkerd.cluster.local
+     isCA: true
+     privateKey:
+       algorithm: ECDSA
+     usages:
+       - cert sign
+       - crl sign
+       - server auth
+       - client auth
    ```
 
 6. **Package and Deploy the Helm Chart**:
@@ -102,4 +72,4 @@ Using `template.fullname` in your Helm chart can help to ensure that the names o
      helm install linkerd-cert-manager ./linkerd-cert-manager-0.1.0.tgz
      ```
 
-By following these steps, you ensure that your Helm chart uses `template.fullname` to generate unique and consistent names for your resources. This approach helps to avoid naming collisions and makes it easier to manage multiple instances of your chart.
+This configuration ensures that only the `duration` and `renewBefore` fields are parameterized, while the rest of the YAML manifests remain static.
