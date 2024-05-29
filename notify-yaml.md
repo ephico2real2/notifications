@@ -2,6 +2,26 @@ The current design of the script stops execution if it encounters an error, spec
 
 However, for a more resilient and user-friendly approach, the script can be modified to log errors and skip problematic entries while continuing to process the rest of the configurations. This design is beneficial for scenarios where you want the script to handle multiple configurations and continue running despite encountering errors in some of them.
 
+`` projects-notifications.yaml ``
+
+```yaml
+projects:
+  - project_id: "your-project-id-1"
+    cluster_name: "your-cluster-name-1"
+    compute_region: "your-compute-region-1"
+    base_topic_name: "your-base-topic-name-1"
+    suffix: "notifier"
+    notification_type: "UpgradeEvent|SecurityBulletinEvent"
+    disable: false
+  - project_id: "your-project-id-2"
+    cluster_name: "your-cluster-name-2"
+    compute_region: "your-compute-region-2"
+    base_topic_name: "your-base-topic-name-2"
+    suffix: ""
+    notification_type: "UpgradeEvent|SecurityBulletinEvent"
+    disable: true
+
+```
 ### Updated Script with Error Logging and Skipping Invalid Entries
 
 ```bash
