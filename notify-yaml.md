@@ -22,19 +22,11 @@ projects:
     disable: true
 
 ```
-The error messages you're encountering suggest that the active project and region information are not being set correctly. Additionally, it seems like there might be permission issues with the credentials being used.
+The issue with the "null region" error indicates that the `COMPUTE_REGION` variable is not being set correctly. Let's ensure that the values are being read correctly from the YAML file and applied properly in the script.
 
-Let's address the issues step-by-step:
+Here is the corrected shell script with additional checks and debugging information to ensure that all values are set correctly and to help diagnose any issues.
 
-1. **Set the Active Project Correctly**: Ensure that the project ID is being set correctly before making any API calls.
-2. **Set the Region Correctly**: Ensure the region is not `null`.
-3. **Handle Credentials**: Ensure the correct credentials are being used.
-
-Let's refine the script to address these issues.
-
-### Updated Shell Script
-
-Here's an updated version of the shell script with improved handling of project and region settings:
+### Corrected Shell Script
 
 ```bash
 #!/bin/bash
@@ -156,6 +148,9 @@ yq eval '.projects[]' "${CONFIG_FILE}" | while read -r project; do
     continue
   fi
 
+  # Log the values being used
+  log "Processing project: ${PROJECT_ID}, cluster: ${CLUSTER_NAME}, region: ${COMPUTE_REGION}"
+
   # Set the project in gcloud
   if ! gcloud config set project "${PROJECT_ID}"; then
     log "Failed to set project ${PROJECT_ID}. Skipping this entry."
@@ -200,24 +195,49 @@ yq eval '.projects[]' "${CONFIG_FILE}" | while read -r project; do
 done
 ```
 
-### Key Improvements
+### Example `projects-notifications.yaml`
 
-1. **Ensure Region is Correctly Set**: Added checks to ensure the `COMPUTE_REGION` is not null.
-2. **Project Configuration**: Each project ID is set before any operations, ensuring correct context for each API call.
-3. **Handle Permissions**: Ensured proper handling of permissions issues by checking and setting the active project correctly.
+Make sure your YAML file is correctly structured and does not have any missing values:
+
+```yaml
+projects:
+  - project_id: "your-project-id-1"
+    cluster_name: "your-cluster-name-1"
+    compute_region: "us-central1"
+    base_topic_name: "your-base-topic-name-1"
+    suffix: "notifier"
+    notification_type: "UpgradeEvent|SecurityBulletinEvent"
+    disable: false
+
+  - project_id: "your-project-id-2"
+    cluster_name: "your-cluster-name-2"
+    compute_region: "europe-west1"
+    base_topic_name: "your-base-topic-name-2"
+    suffix: ""
+    notification_type: "UpgradeEvent|SecurityBulletinEvent"
+    disable: true
+
+  - project_id: "your-project-id-3"
+    cluster_name: "your-cluster-name-3"
+    compute_region: "asia-east1"
+    base_topic_name: "your-base-topic-name-3"
+    suffix: "alerts"
+    notification_type: "NodePoolUpdateEvent"
+    disable: false
+```
 
 ### Running the Updated Script
 
-1. **Ensure the Script is Executable**:
+Ensure the script is executable:
 
-   ```bash
-   chmod +x enable_disable_cluster_notifications.sh
-   ```
+```bash
+chmod +x enable_disable_cluster_notifications.sh
+```
 
-2. **Run the Script with the Configuration File**:
+Run the script with the configuration file:
 
-   ```bash
-   ./enable_disable_cluster_notifications.sh -f projects-notifications.yaml
-   ```
+```bash
+./enable_disable_cluster_notifications.sh -f projects-notifications.yaml
+```
 
-This updated script should correctly handle setting the project and region, and manage errors more gracefully, ensuring the script continues processing other entries even if it encounters issues with one.
+This should help address the issue with the region being null by ensuring that all values are correctly set and logged for debugging purposes.
