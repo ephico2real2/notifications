@@ -1,32 +1,6 @@
-The current design of the script stops execution if it encounters an error, specifically when validating or setting configurations for a project. This approach ensures that any critical errors are immediately addressed rather than potentially leading to inconsistent states or configurations across different projects.
+Certainly! Here is the updated `enable_disable_cluster_notifications.sh` script with the correct parsing logic incorporated. 
 
-However, for a more resilient and user-friendly approach, the script can be modified to log errors and skip problematic entries while continuing to process the rest of the configurations. This design is beneficial for scenarios where you want the script to handle multiple configurations and continue running despite encountering errors in some of them.
-
-`` projects-notifications.yaml ``
-
-```yaml
-projects:
-  - project_id: "your-project-id-1"
-    cluster_name: "your-cluster-name-1"
-    compute_region: "your-compute-region-1"
-    base_topic_name: "your-base-topic-name-1"
-    suffix: "notifier"
-    notification_type: "UpgradeEvent|SecurityBulletinEvent"
-    disable: false
-  - project_id: "your-project-id-2"
-    cluster_name: "your-cluster-name-2"
-    compute_region: "your-compute-region-2"
-    base_topic_name: "your-base-topic-name-2"
-    suffix: ""
-    notification_type: "UpgradeEvent|SecurityBulletinEvent"
-    disable: true
-
-```
-The issue with the "null region" error indicates that the `COMPUTE_REGION` variable is not being set correctly. Let's ensure that the values are being read correctly from the YAML file and applied properly in the script.
-
-Here is the corrected shell script with additional checks and debugging information to ensure that all values are set correctly and to help diagnose any issues.
-
-### Corrected Shell Script
+### Updated `enable_disable_cluster_notifications.sh`
 
 ```bash
 #!/bin/bash
@@ -133,14 +107,15 @@ if [ ! -r "${CONFIG_FILE}" ]; then
 fi
 
 # Read the YAML configuration file and loop over each project configuration
-yq eval '.projects[]' "${CONFIG_FILE}" | while read -r project; do
-  PROJECT_ID=$(echo "${project}" | yq eval '.project_id' -)
-  CLUSTER_NAME=$(echo "${project}" | yq eval '.cluster_name' -)
-  COMPUTE_REGION=$(echo "${project}" | yq eval '.compute_region' -)
-  BASE_TOPIC_NAME=$(echo "${project}" | yq eval '.base_topic_name' -)
-  SUFFIX=$(echo "${project}" | yq eval '.suffix' -)
-  NOTIFICATION_TYPE=$(echo "${project}" | yq eval '.notification_type' -)
-  DISABLE=$(echo "${project}" | yq eval '.disable' -)
+project_count=$(yq eval '.projects | length' "${CONFIG_FILE}")
+for (( i=0; i<project_count; i++ )); do
+  PROJECT_ID=$(yq eval ".projects[$i].project_id" "${CONFIG_FILE}")
+  CLUSTER_NAME=$(yq eval ".projects[$i].cluster_name" "${CONFIG_FILE}")
+  COMPUTE_REGION=$(yq eval ".projects[$i].compute_region" "${CONFIG_FILE}")
+  BASE_TOPIC_NAME=$(yq eval ".projects[$i].base_topic_name" "${CONFIG_FILE}")
+  SUFFIX=$(yq eval ".projects[$i].suffix" "${CONFIG_FILE}")
+  NOTIFICATION_TYPE=$(yq eval ".projects[$i].notification_type" "${CONFIG_FILE}")
+  DISABLE=$(yq eval ".projects[$i].disable" "${CONFIG_FILE}")
 
   # Validate required fields
   if [ -z "${PROJECT_ID}" ] || [ -z "${CLUSTER_NAME}" ] || [ -z "${COMPUTE_REGION}" ] || [ -z "${BASE_TOPIC_NAME}" ] || [ -z "${NOTIFICATION_TYPE}" ] && [ "${DISABLE}" == "false" ]; then
@@ -195,9 +170,16 @@ yq eval '.projects[]' "${CONFIG_FILE}" | while read -r project; do
 done
 ```
 
+### Explanation
+
+1. **Validation of Tools**: The script ensures that both `yq` and `gcloud` are installed before proceeding.
+2. **Parsing YAML**: Uses a loop with an index to correctly parse the YAML file and extract the required fields.
+3. **Logging**: Outputs detailed logs for better traceability and debugging.
+4. **Error Handling**: Includes error handling to skip entries with missing required fields or errors in processing.
+
 ### Example `projects-notifications.yaml`
 
-Make sure your YAML file is correctly structured and does not have any missing values:
+Ensure your YAML file is correctly structured:
 
 ```yaml
 projects:
@@ -226,18 +208,18 @@ projects:
     disable: false
 ```
 
-### Running the Updated Script
+### Running the Script
 
-Ensure the script is executable:
+1. **Ensure the Script is Executable**:
 
-```bash
-chmod +x enable_disable_cluster_notifications.sh
-```
+   ```bash
+   chmod +x enable_disable_cluster_notifications.sh
+   ```
 
-Run the script with the configuration file:
+2. **Run the Script with the Configuration File**:
 
-```bash
-./enable_disable_cluster_notifications.sh -f projects-notifications.yaml
-```
+   ```bash
+   ./enable_disable_cluster_notifications.sh -f projects-notifications.yaml
+   ```
 
-This should help address the issue with the region being null by ensuring that all values are correctly set and logged for debugging purposes.
+This should now correctly parse the YAML file and process each project configuration as expected.
