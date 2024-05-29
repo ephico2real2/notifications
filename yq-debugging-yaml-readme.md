@@ -1,36 +1,8 @@
-Sure, to troubleshoot the parsing of individual fields in the `projects-notifications.yaml` file using `yq`, you can add some debug output to see exactly what values are being extracted.
+I apologize for the oversight earlier. Using a for loop with an index is a reliable approach to handle lists in YAML files, especially when dealing with multiple entries. The initial methods were attempts to use `yq` more directly, but the indexed loop is indeed a more robust solution for extracting structured data from YAML files.
 
-Here's a simplified script to print out each field for debugging purposes:
+### Final Script
 
-`` projects-notifications.yaml ``
-```yaml
-projects:
-  - project_id: "your-project-id-1"
-    cluster_name: "your-cluster-name-1"
-    compute_region: "us-central1"
-    base_topic_name: "your-base-topic-name-1"
-    suffix: "notifier"
-    notification_type: "UpgradeEvent|SecurityBulletinEvent"
-    disable: false
-
-  - project_id: "your-project-id-2"
-    cluster_name: "your-cluster-name-2"
-    compute_region: "europe-west1"
-    base_topic_name: "your-base-topic-name-2"
-    suffix: ""
-    notification_type: "UpgradeEvent|SecurityBulletinEvent"
-    disable: true
-
-  - project_id: "your-project-id-3"
-    cluster_name: "your-cluster-name-3"
-    compute_region: "asia-east1"
-    base_topic_name: "your-base-topic-name-3"
-    suffix: "alerts"
-    notification_type: "NodePoolUpdateEvent"
-    disable: false
-```
-
-### Simplified Debugging Script
+Here’s the final version of the script that parses the YAML file correctly and processes each project configuration:
 
 ```bash
 #!/bin/bash
@@ -80,14 +52,15 @@ if [ ! -r "${CONFIG_FILE}" ]; then
 fi
 
 # Read the YAML configuration file and loop over each project configuration
-yq eval '.projects[]' "${CONFIG_FILE}" | while read -r project; do
-  PROJECT_ID=$(echo "${project}" | yq eval '.project_id' -)
-  CLUSTER_NAME=$(echo "${project}" | yq eval '.cluster_name' -)
-  COMPUTE_REGION=$(echo "${project}" | yq eval '.compute_region' -)
-  BASE_TOPIC_NAME=$(echo "${project}" | yq eval '.base_topic_name' -)
-  SUFFIX=$(echo "${project}" | yq eval '.suffix' -)
-  NOTIFICATION_TYPE=$(echo "${project}" | yq eval '.notification_type' -)
-  DISABLE=$(echo "${project}" | yq eval '.disable' -)
+project_count=$(yq eval '.projects | length' "${CONFIG_FILE}")
+for (( i=0; i<project_count; i++ )); do
+  PROJECT_ID=$(yq eval ".projects[$i].project_id" "${CONFIG_FILE}")
+  CLUSTER_NAME=$(yq eval ".projects[$i].cluster_name" "${CONFIG_FILE}")
+  COMPUTE_REGION=$(yq eval ".projects[$i].compute_region" "${CONFIG_FILE}")
+  BASE_TOPIC_NAME=$(yq eval ".projects[$i].base_topic_name" "${CONFIG_FILE}")
+  SUFFIX=$(yq eval ".projects[$i].suffix" "${CONFIG_FILE}")
+  NOTIFICATION_TYPE=$(yq eval ".projects[$i].notification_type" "${CONFIG_FILE}")
+  DISABLE=$(yq eval ".projects[$i].disable" "${CONFIG_FILE}")
 
   # Print out the values for debugging
   log "PROJECT_ID: ${PROJECT_ID}"
@@ -100,7 +73,38 @@ yq eval '.projects[]' "${CONFIG_FILE}" | while read -r project; do
 done
 ```
 
-### Running the Debugging Script
+### Example `projects-notifications.yaml`
+
+Make sure your YAML file is structured correctly:
+
+```yaml
+projects:
+  - project_id: "your-project-id-1"
+    cluster_name: "your-cluster-name-1"
+    compute_region: "us-central1"
+    base_topic_name: "your-base-topic-name-1"
+    suffix: "notifier"
+    notification_type: "UpgradeEvent|SecurityBulletinEvent"
+    disable: false
+
+  - project_id: "your-project-id-2"
+    cluster_name: "your-cluster-name-2"
+    compute_region: "europe-west1"
+    base_topic_name: "your-base-topic-name-2"
+    suffix: ""
+    notification_type: "UpgradeEvent|SecurityBulletinEvent"
+    disable: true
+
+  - project_id: "your-project-id-3"
+    cluster_name: "your-cluster-name-3"
+    compute_region: "asia-east1"
+    base_topic_name: "your-base-topic-name-3"
+    suffix: "alerts"
+    notification_type: "NodePoolUpdateEvent"
+    disable: false
+```
+
+### Running the Script
 
 1. **Ensure the Script is Executable**:
 
@@ -114,18 +118,9 @@ done
    ./debug_yaml_parsing.sh -f projects-notifications.yaml
    ```
 
-### Expected Output
+### Explanation
 
-Running this script should output the values of each field extracted from the YAML file, like this:
+- **Loop with Index**: This approach ensures that each project's fields are correctly extracted by iterating over the project list using an index.
+- **Direct Field Extraction**: Using `yq` to directly extract fields ensures the correct assignment of values.
 
-```bash
-2024-05-29 12:34:56 - PROJECT_ID: your-project-id-1
-2024-05-29 12:34:56 - CLUSTER_NAME: your-cluster-name-1
-2024-05-29 12:34:56 - COMPUTE_REGION: us-central1
-2024-05-29 12:34:56 - BASE_TOPIC_NAME: your-base-topic-name-1
-2024-05-29 12:34:56 - SUFFIX: notifier
-2024-05-29 12:34:56 - NOTIFICATION_TYPE: UpgradeEvent|SecurityBulletinEvent
-2024-05-29 12:34:56 - DISABLE: false
-```
-
-This will help you verify that the fields are being parsed correctly from the YAML file. If any values are `null` or missing, you can then check the structure of your YAML file to ensure it matches the expected format.
+This method ensures the script reads the YAML file correctly and processes each project configuration as expected. Thank you for your patience, and I'm glad we could resolve the issue.
