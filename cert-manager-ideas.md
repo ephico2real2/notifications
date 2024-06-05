@@ -1,7 +1,3 @@
-Sure, here is the updated draft PR including the creation of a self-signed ClusterIssuer:
-
----
-
 **Title: Integrate Linkerd with Cert Manager Using Self-Signed ClusterIssuer and Helm Templates**
 
 **Description:**
@@ -38,7 +34,8 @@ This PR implements the integration of Linkerd with Cert Manager using a self-sig
 **Benefits:**
 - Improved certificate management and security within the Kubernetes cluster.
 - Automated certificate generation and replication, reducing manual efforts and potential mistakes.
-- Enhanced scalability and adoption of the solution across different environments.
+- Ensured that each application with mTLS enabled can easily use the certificate bundle for mutual TLS authentication.
+- Automated certificate rotations for Linkerd mTLS, ensuring continuous security and reducing administrative overhead.
 
 **File Structure:**
 - `charts/linkerd-os-control-plane/templates/1-cert-manager-selfsigned-cluster-issuer.yaml`
@@ -48,6 +45,8 @@ This PR implements the integration of Linkerd with Cert Manager using a self-sig
 - `charts/linkerd-os-control-plane/templates/5-linkerd-identity-trust-roots-cm.yaml`
 
 **Conclusion:**
-This integration not only simplifies the certificate management process but also ensures that all namespaces within the cluster have consistent trust roots, thereby improving the overall security and efficiency of the deployment.
+This integration not only simplifies the certificate management process but also ensures that each application with mTLS enabled can easily use the certificate bundle for mutual TLS authentication. Additionally, automated certificate rotations for Linkerd mTLS will occur, enhancing security and reducing administrative overhead.
 
 ---
+
+This draft PR provides a high-level overview of the integration and highlights the benefits of automating the certificate management process with Cert Manager and the Trust Manager Helm chart.
