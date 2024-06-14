@@ -59,7 +59,7 @@ app.listen(port, () => {
     "start": "node app.js"
   },
   "dependencies": {
-    "express": "^4.17.1"
+    "express": "^4.19.2"
   }
 }
 ```
