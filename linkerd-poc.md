@@ -155,8 +155,6 @@ spec:
       targetPort: 3000
 ```
 
-```
-
 ### Updated Makefile
 
 ```makefile
