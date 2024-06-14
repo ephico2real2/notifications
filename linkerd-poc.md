@@ -4,7 +4,8 @@
 ### Directory Structure
 
 ```
-.
+tree hello-world-poc
+
 ├── Makefile
 ├── Dockerfile
 ├── app.js
