@@ -308,19 +308,32 @@ check-namespace:
 
 6. **`apply_deployments.sh`**
 
-    ```bash
-    #!/bin/bash
+```bash
+#!/bin/bash
 
-    set -e
+set -e
 
-    # Load environment variables from .env file
-    source .env
+# Function to check if envsubst is installed
+check_envsubst() {
+  if ! command -v envsubst &> /dev/null; then
+    echo "envsubst could not be found. Please install it using:"
+    echo "  brew install gettext"
+    exit 1
+  fi
+}
 
-    # Substitute variables in helloworld1.yaml.template and apply
-    envsubst < kubernetes/helloworld1.yaml.template | kubectl apply -f -
+# Check if envsubst is installed
+check_envsubst
 
-    # Substitute variables in helloworld2.yaml.template and apply
-    envsubst < kubernetes/helloworld2.yaml.template | kubectl apply -f -
-    ```
+# Load environment variables from .env file
+source .env
+
+# Substitute variables in helloworld1.yaml.template and apply
+envsubst < kubernetes/helloworld1.yaml.template | kubectl apply -f -
+
+# Substitute variables in helloworld2.yaml.template and apply
+envsubst < kubernetes/helloworld2.yaml.template | kubectl apply -f -
+
+```
 
 This setup ensures that the script prompts for the Docker password and patches the `artifact-registry-ksa` service account, and it includes a cleanup script for the Docker Hub resources.
