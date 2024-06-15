@@ -779,3 +779,220 @@ kubectl patch serviceaccount default \
     -p "{\"imagePullSecrets\": [{\"name\": \"$REGISTRY_SECRET\"}]}"
 ```
 
+
+##################
+
+Here are the two scripts and the `Makefile` with all the necessary details:
+
+### `setup_workload_identity.sh`
+
+```bash
+#!/bin/bash
+
+set -e
+
+PROJECT_ID=your-project-id
+SERVICE_ACCOUNT_NAME=artifact-registry-sa
+NAMESPACE=linkerd-poc
+KSA_NAME=artifact-registry-ksa
+REGION=us-central
+REPO_NAME=your-repo-name
+SERVICE_ACCOUNT_EMAIL=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
+
+# Enable Workload Identity on the GKE cluster
+gcloud container clusters update <cluster-name> \
+    --workload-pool=$PROJECT_ID.svc.id.goog
+
+# Create Google Cloud IAM service account
+if ! gcloud iam service-accounts list --filter="email:$SERVICE_ACCOUNT_EMAIL" --format="value(email)"; then
+    gcloud iam service-accounts create $SERVICE_ACCOUNT_NAME \
+        --display-name "Service Account for Artifact Registry"
+else
+    echo "Service account $SERVICE_ACCOUNT_NAME already exists."
+fi
+
+# Grant permissions to the IAM service account
+if ! gcloud projects get-iam-policy $PROJECT_ID --flatten="bindings[].members" --format="table(bindings.members)" | grep $SERVICE_ACCOUNT_EMAIL; then
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member "serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
+        --role "roles/artifactregistry.reader"
+else
+    echo "Service account $SERVICE_ACCOUNT_EMAIL already has the role roles/artifactregistry.reader."
+fi
+
+# Create Kubernetes service account
+kubectl create serviceaccount $KSA_NAME --namespace $NAMESPACE || echo "Kubernetes service account $KSA_NAME already exists."
+
+# Bind the Kubernetes service account to the Google IAM service account
+gcloud iam service-accounts add-iam-policy-binding $SERVICE_ACCOUNT_EMAIL \
+    --role "roles/iam.workloadIdentityUser" \
+    --member "serviceAccount:$PROJECT_ID.svc.id.goog[$NAMESPACE/$KSA_NAME]"
+
+# Annotate the Kubernetes service account
+kubectl annotate serviceaccount $KSA_NAME \
+    --namespace $NAMESPACE \
+    iam.gke.io/gcp-service-account=$SERVICE_ACCOUNT_EMAIL --overwrite
+```
+
+### `cleanup_registry.sh`
+
+```bash
+#!/bin/bash
+
+set -e
+
+PROJECT_ID=your-project-id
+SERVICE_ACCOUNT_NAME=artifact-registry-sa
+SERVICE_ACCOUNT_EMAIL=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
+NAMESPACE=linkerd-poc
+KSA_NAME=artifact-registry-ksa
+
+# Revoke the IAM policy binding
+gcloud projects remove-iam-policy-binding $PROJECT_ID \
+    --member "serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
+    --role "roles/artifactregistry.reader"
+
+gcloud iam service-accounts remove-iam-policy-binding $SERVICE_ACCOUNT_EMAIL \
+    --member "serviceAccount:$PROJECT_ID.svc.id.goog[$NAMESPACE/$KSA_NAME]" \
+    --role "roles/iam.workloadIdentityUser"
+
+# Delete the IAM service account
+gcloud iam service-accounts delete $SERVICE_ACCOUNT_EMAIL --quiet
+
+# Delete the Kubernetes service account
+kubectl delete serviceaccount $KSA_NAME --namespace $NAMESPACE
+```
+
+### `Makefile`
+
+```makefile
+DOCKER_REG=your_dockerhub_username
+IMAGE_NAME=helloworld
+IMAGE_TAG=1.0
+NAMESPACE=linkerd-poc
+DEPLOYMENTS=helloworld1 helloworld2
+REGION=us-central
+PROJECT_ID=your-project-id
+REPO_NAME=your-repo-name
+SERVICE_ACCOUNT_NAME=artifact-registry-sa
+KSA_NAME=artifact-registry-ksa
+DOCKER_SERVER=$(REGION)-docker.pkg.dev/$(PROJECT_ID)/$(REPO_NAME)
+
+all: build push deploy-all
+
+build:
+	docker build -t $(DOCKER_REG)/$(IMAGE_NAME):$(IMAGE_TAG) .
+
+push:
+	docker push $(DOCKER_REG)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+deploy-all: namespace registry $(DEPLOYMENTS)
+
+namespace:
+	kubectl apply -f kubernetes/namespace.yaml
+
+registry: check-namespace
+	./setup_workload_identity.sh
+
+docker-registry-secret: registry
+
+helloworld1: docker-registry-secret
+	kubectl apply -f kubernetes/helloworld1.yaml
+
+helloworld2: docker-registry-secret
+	kubectl apply -f kubernetes/helloworld2.yaml
+
+deploy: registry check-namespace
+	@$(foreach deployment, $(filter-out $@,$(MAKECMDGOALS)), \
+		kubectl apply -f kubernetes/$(deployment).yaml;)
+
+rollout:
+	kubectl rollout restart deployment/$(deployment) -n $(NAMESPACE)
+
+inspect:
+	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\\.io/proxy-injector\\.linkerd\\.io/status}{"\n"}{end}'
+
+clean:
+	kubectl delete -f kubernetes/helloworld1.yaml || true \
+	&& kubectl delete -f kubernetes/helloworld2.yaml || true \
+	&& kubectl delete namespace $(NAMESPACE) || true
+
+clean-gcloud:
+	./cleanup_registry.sh
+
+check-namespace:
+	@if ! kubectl get namespace $(NAMESPACE) > /dev/null 2>&1; then \
+		echo "Namespace $(NAMESPACE) does not exist. Please run 'make namespace' first."; \
+		exit 1; \
+	fi
+
+# Prevent make from treating command line arguments as file names
+%:
+	@:
+```
+
+### Usage Instructions
+
+1. **Authenticate with Google Cloud:**
+
+   ```bash
+   gcloud auth login
+   gcloud config set project your-project-id
+   ```
+
+2. **Build and push the Docker image:**
+
+   ```bash
+   make build
+   make push
+   ```
+
+3. **Create the namespace:**
+
+   ```bash
+   make namespace
+   ```
+
+4. **Set up Workload Identity:**
+
+   ```bash
+   make registry
+   ```
+
+5. **Deploy all Kubernetes resources:**
+
+   ```bash
+   make deploy-all
+   ```
+
+6. **Deploy a specific deployment:**
+
+   ```bash
+   make deploy helloworld1
+   ```
+
+7. **Rollout a specific deployment:**
+
+   ```bash
+   make rollout deployment=helloworld1
+   ```
+
+8. **Inspect deployments to confirm if Linkerd sidecar proxy was injected:**
+
+   ```bash
+   make inspect
+   ```
+
+9. **Clean up the Kubernetes resources:**
+
+   ```bash
+   make clean
+   ```
+
+10. **Clean up the Google Cloud resources:**
+
+    ```bash
+    make clean-gcloud
+    ```
+
+This setup includes the setup and cleanup scripts, as well as the `Makefile` to automate the deployment and cleanup of the necessary resources.
