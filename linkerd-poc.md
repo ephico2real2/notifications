@@ -386,3 +386,137 @@ clean:
 2. **Functional Check:**
    - Verify that each command works as expected by running it in the correct order.
    - Ensure that parameterized variables (`DOCKER_REG`, `DOCKER_SERVER`, `DOCKER_EMAIL`, etc.) are correctly referenced in the commands.
+
+
+
+Sure, I'll adjust the `Makefile` to ensure that the namespace exists before running any deployment-related targets (`helloworld1`, `helloworld2`, and `deploy`). Here's the updated `Makefile`:
+
+### Updated Makefile
+
+```makefile
+DOCKER_REG=your_dockerhub_username
+IMAGE_NAME=helloworld
+IMAGE_TAG=1.0
+NAMESPACE=linkerd-poc
+DEPLOYMENTS=helloworld1 helloworld2
+REGISTRY_SECRET=gcp-artifactor-registry
+DOCKER_SERVER=us-central1-docker.pkg.dev
+DOCKER_EMAIL=xxxx
+
+all: build push deploy-all
+
+build:
+	docker build -t $(DOCKER_REG)/$(IMAGE_NAME):$(IMAGE_TAG) .
+
+push:
+	docker push $(DOCKER_REG)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+deploy-all: namespace registry $(DEPLOYMENTS)
+
+namespace:
+	kubectl apply -f kubernetes/namespace.yaml
+
+registry: check-namespace
+	$(MAKE) docker-registry-secret
+
+docker-registry-secret:
+	gcloud auth configure-docker $(DOCKER_SERVER) \
+	&& if kubectl get secret $(REGISTRY_SECRET) -n $(NAMESPACE) > /dev/null 2>&1; then \
+		kubectl delete secret $(REGISTRY_SECRET) -n $(NAMESPACE); \
+	fi \
+	&& kubectl -n $(NAMESPACE) create secret docker-registry $(REGISTRY_SECRET) \
+	--docker-server=$(DOCKER_SERVER) \
+	--docker-username=_json_key \
+	--docker-email=$(DOCKER_EMAIL) \
+	--docker-password="$$(cat ~/.docker/config.json)"
+
+helloworld1: registry check-namespace
+	kubectl apply -f kubernetes/helloworld1.yaml
+
+helloworld2: registry check-namespace
+	kubectl apply -f kubernetes/helloworld2.yaml
+
+deploy: registry check-namespace
+	@$(foreach deployment, $(filter-out $@,$(MAKECMDGOALS)), \
+		kubectl apply -f kubernetes/$(deployment).yaml;)
+
+rollout:
+	kubectl rollout restart deployment/$(deployment) -n $(NAMESPACE)
+
+inspect:
+	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\\.io/proxy-injector\\.linkerd\\.io/status}{"\n"}{end}'
+
+clean:
+	kubectl delete -f kubernetes/helloworld1.yaml || true \
+	&& kubectl delete -f kubernetes/helloworld2.yaml || true \
+	&& kubectl delete namespace $(NAMESPACE) || true
+
+check-namespace:
+	@if ! kubectl get namespace $(NAMESPACE) > /dev/null 2>&1; then \
+		echo "Namespace $(NAMESPACE) does not exist. Please run 'make namespace' first."; \
+		exit 1; \
+	fi
+
+# Prevent make from treating command line arguments as file names
+%:
+	@:
+```
+
+### Explanation
+
+- **check-namespace:** A new target that checks if the namespace exists. If not, it prompts the user to run `make namespace` and exits with an error.
+- **registry:** Depends on `check-namespace` to ensure the namespace exists before creating the Docker registry secret.
+- **helloworld1, helloworld2, deploy:** All depend on `registry` and `check-namespace` to ensure the namespace exists and the registry secret is created before applying the deployment manifests.
+
+### Usage Instructions
+
+1. **Build and push the Docker image:**
+
+   ```bash
+   make build
+   make push
+   ```
+
+2. **Create the namespace:**
+
+   ```bash
+   make namespace
+   ```
+
+3. **Create the Docker registry secret:**
+
+   ```bash
+   make registry
+   ```
+
+4. **Deploy all Kubernetes resources:**
+
+   ```bash
+   make deploy-all
+   ```
+
+5. **Deploy a specific deployment:**
+
+   ```bash
+   make deploy helloworld1
+   ```
+
+6. **Rollout a specific deployment:**
+
+   ```bash
+   make rollout deployment=helloworld1
+   ```
+
+7. **Inspect deployments to confirm if Linkerd sidecar proxy was injected:**
+
+   ```bash
+   make inspect
+   ```
+
+8. **Clean up the resources:**
+
+   ```bash
+   make clean
+   ```
+
+
