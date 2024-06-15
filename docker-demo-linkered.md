@@ -1,4 +1,4 @@
-I apologize for the oversight. Here is the `cleanup_dockerhub.sh` script to clean up the Docker Hub resources:
+
 
 ### `cleanup_dockerhub.sh`
 
