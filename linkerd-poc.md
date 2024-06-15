@@ -713,3 +713,69 @@ Thank you for the clarification. I'll update the `DOCKER_SERVER` to include the 
 This setup ensures that the `DOCKER_SERVER` includes the necessary `PROJECT_ID`, `REPO_NAME`, and `REGION`, and the registry-related tasks are decoupled from the `Makefile` and handled by the `setup_registry.sh` script. This makes the `Makefile` cleaner and more maintainable.
 
 
+
+
+############################
+
+
+```
+#!/bin/bash
+
+set -e
+
+PROJECT_ID=your-project-id
+REPO_NAME=your-repo-name
+REGION=us-central
+SERVICE_ACCOUNT_NAME=artifact-registry-sa
+NAMESPACE=linkerd-poc
+REGISTRY_SECRET=artifact-registry-secret
+DOCKER_SERVER=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME
+SERVICE_ACCOUNT_EMAIL=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
+
+# Authenticate with Google Cloud
+gcloud auth login
+gcloud config set project $PROJECT_ID
+
+# Create service account if it does not exist
+if ! gcloud iam service-accounts list --filter="email:$SERVICE_ACCOUNT_EMAIL" --format="value(email)"; then
+    gcloud iam service-accounts create $SERVICE_ACCOUNT_NAME \
+        --display-name "Service Account for Artifact Registry"
+else
+    echo "Service account $SERVICE_ACCOUNT_NAME already exists."
+fi
+
+# Grant permissions if not already granted
+if ! gcloud projects get-iam-policy $PROJECT_ID --flatten="bindings[].members" --format="table(bindings.members)" | grep $SERVICE_ACCOUNT_EMAIL; then
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member serviceAccount:$SERVICE_ACCOUNT_EMAIL \
+        --role roles/artifactregistry.reader
+else
+    echo "Service account $SERVICE_ACCOUNT_EMAIL already has the role roles/artifactregistry.reader."
+fi
+
+# Create and download the key
+gcloud iam service-accounts keys create ~/key.json \
+    --iam-account $SERVICE_ACCOUNT_EMAIL
+
+# Create Kubernetes secret
+if kubectl get secret $REGISTRY_SECRET -n $NAMESPACE > /dev/null 2>&1; then
+    kubectl delete secret $REGISTRY_SECRET -n $NAMESPACE
+fi
+
+kubectl create secret docker-registry $REGISTRY_SECRET \
+    --namespace $NAMESPACE \
+    --docker-server=$DOCKER_SERVER \
+    --docker-username=_json_key \
+    --docker-password="$(cat ~/key.json)" \
+    --docker-email=$SERVICE_ACCOUNT_EMAIL
+
+# Annotate and patch the default service account
+kubectl annotate serviceaccount default \
+    --namespace $NAMESPACE \
+    "kubernetes.io/service-account.name=$SERVICE_ACCOUNT_NAME" --overwrite
+
+kubectl patch serviceaccount default \
+    --namespace $NAMESPACE \
+    -p "{\"imagePullSecrets\": [{\"name\": \"$REGISTRY_SECRET\"}]}"
+```
+
