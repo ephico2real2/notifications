@@ -62,8 +62,10 @@ helloworld2: docker-registry-secret
 deploy: registry check-namespace
 	./apply_deployments.sh
 
+
 rollout:
-	kubectl rollout restart deployment/$(deployment) -n $(NAMESPACE)
+	@read -p "Enter deployment name to rollout: " deployment; \
+	kubectl rollout restart deployment/$$deployment -n $(NAMESPACE)
 
 inspect:
 	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\.io/proxy-injector\.linkerd\.io/status}{"\n"}{end}'
