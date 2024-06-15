@@ -1,4 +1,5 @@
-
+Docker
+---
 
 ### `cleanup_dockerhub.sh`
 
@@ -288,11 +289,11 @@ kubectl patch serviceaccount $SERVICE_ACCOUNT_NAME \
     --namespace $NAMESPACE \
     -p "{\"imagePullSecrets\": [{\"name\": \"$REGISTRY_SECRET\"}]}"
 
-    ```
+```
 
 5. **`cleanup_dockerhub.sh`**
 
-    ```bash
+```bash
     #!/bin/bash
 
     set -e
@@ -314,7 +315,9 @@ kubectl patch serviceaccount $SERVICE_ACCOUNT_NAME \
 
 6. **`apply_deployments.sh`**
 
+
 ```bash
+
 #!/bin/bash
 
 set -e
@@ -341,5 +344,4 @@ envsubst < kubernetes/helloworld1.yaml.template | kubectl apply -f -
 envsubst < kubernetes/helloworld2.yaml.template | kubectl apply -f -
 
 ```
-
-This setup ensures that the script prompts for the Docker password and patches the `artifact-registry-ksa` service account, and it includes a cleanup script for the Docker Hub resources.
+---
