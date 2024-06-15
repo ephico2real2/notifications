@@ -368,5 +368,123 @@ SERVICE_ACCOUNT_NAME=artifact-registry-ksa
     ```bash
     make clean-gcloud
     ```
+################
+The error message indicates that the service account `artifact-registry-sa` does not exist in the project `platform-cloud-engineering`. This is why the policy binding operation fails. Let's troubleshoot this step-by-step:
 
-This setup ensures that the Docker registry secret is properly managed, the Workload Identity is set up correctly, and the necessary IAM roles are assigned. It also includes scripts for setting up and cleaning up the environment, as well as templates for the Kubernetes deployments that use environment variables for flexibility.
+1. **Verify the Service Account Creation:**
+
+   Ensure the service account was created correctly in the specified project. You can list the service accounts in your project to verify:
+
+   ```bash
+   gcloud iam service-accounts list --project platform-cloud-engineering
+   ```
+
+   If the service account `artifact-registry-sa` is not listed, create it:
+
+   ```bash
+   gcloud iam service-accounts create artifact-registry-sa \
+       --project platform-cloud-engineering \
+       --display-name "Service Account for Artifact Registry"
+   ```
+
+2. **Correct the IAM Policy Binding Command:**
+
+   Ensure you are using the correct command and service account email format:
+
+   ```bash
+   SERVICE_ACCOUNT_EMAIL=artifact-registry-sa@platform-cloud-engineering.iam.gserviceaccount.com
+
+   gcloud iam service-accounts add-iam-policy-binding $SERVICE_ACCOUNT_EMAIL \
+       --project platform-cloud-engineering \
+       --member "serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
+       --role "roles/artifactregistry.reader"
+   ```
+
+### Updated `setup_workload_identity.sh` Script
+
+Ensure the service account creation and IAM policy binding are correctly handled in the script:
+
+```bash
+#!/bin/bash
+
+set -e
+
+PROJECT_ID=platform-cloud-engineering
+SERVICE_ACCOUNT_NAME=artifact-registry-sa
+NAMESPACE=linkerd-poc
+KSA_NAME=artifact-registry-ksa
+REGION=us-central
+REPO_NAME=cloud-eng-repo
+SERVICE_ACCOUNT_EMAIL=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
+
+# Enable Workload Identity on the GKE cluster
+gcloud container clusters update <cluster-name> \
+    --project $PROJECT_ID \
+    --workload-pool=$PROJECT_ID.svc.id.goog
+
+# Create Google Cloud IAM service account if it doesn't exist
+if ! gcloud iam service-accounts list --filter="email:$SERVICE_ACCOUNT_EMAIL" --project $PROJECT_ID --format="value(email)" | grep $SERVICE_ACCOUNT_EMAIL; then
+    gcloud iam service-accounts create $SERVICE_ACCOUNT_NAME \
+        --project $PROJECT_ID \
+        --display-name "Service Account for Artifact Registry"
+else
+    echo "Service account $SERVICE_ACCOUNT_NAME already exists."
+fi
+
+# Grant permissions to the IAM service account
+if ! gcloud projects get-iam-policy $PROJECT_ID --flatten="bindings[].members" --format="table(bindings.members)" | grep $SERVICE_ACCOUNT_EMAIL; then
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member "serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
+        --role "roles/artifactregistry.reader"
+else
+    echo "Service account $SERVICE_ACCOUNT_EMAIL already has the role roles/artifactregistry.reader."
+fi
+
+# Create Kubernetes service account if it doesn't exist
+kubectl create serviceaccount $KSA_NAME --namespace $NAMESPACE || echo "Kubernetes service account $KSA_NAME already exists."
+
+# Bind the Kubernetes service account to the Google IAM service account
+gcloud iam service-accounts add-iam-policy-binding $SERVICE_ACCOUNT_EMAIL \
+    --role "roles/iam.workloadIdentityUser" \
+    --member "serviceAccount:$PROJECT_ID.svc.id.goog[$NAMESPACE/$KSA_NAME]"
+
+# Annotate the Kubernetes service account
+kubectl annotate serviceaccount $KSA_NAME \
+    --namespace $NAMESPACE \
+    iam.gke.io/gcp-service-account=$SERVICE_ACCOUNT_EMAIL --overwrite
+```
+
+### Usage Instructions
+
+1. **Create or verify the service account:**
+
+   ```bash
+   gcloud iam service-accounts list --project platform-cloud-engineering
+   ```
+
+   If the service account does not exist, create it:
+
+   ```bash
+   gcloud iam service-accounts create artifact-registry-sa \
+       --project platform-cloud-engineering \
+       --display-name "Service Account for Artifact Registry"
+   ```
+
+2. **Bind IAM policy:**
+
+   ```bash
+   SERVICE_ACCOUNT_EMAIL=artifact-registry-sa@platform-cloud-engineering.iam.gserviceaccount.com
+
+   gcloud iam service-accounts add-iam-policy-binding $SERVICE_ACCOUNT_EMAIL \
+       --project platform-cloud-engineering \
+       --member "serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
+       --role "roles/artifactregistry.reader"
+   ```
+
+3. **Run the setup script:**
+
+   ```bash
+   ./setup_workload_identity.sh
+   ```
+
+This should resolve the issue with the service account not being found and allow you to continue with the setup process. If you encounter any further issues, please provide the exact error messages for additional troubleshooting.
