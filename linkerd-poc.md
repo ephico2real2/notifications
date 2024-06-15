@@ -519,4 +519,197 @@ check-namespace:
    make clean
    ```
 
+################################################
+Thank you for the clarification. I'll update the `DOCKER_SERVER` to include the project ID and repository name, and preserve the region. Additionally, I'll ensure the `setup_registry.sh` script and `Makefile` correctly reflect these changes.
+
+### Step-by-Step Guide
+
+1. **Update the Shell Script for Registry Setup:**
+
+   Create a file named `setup_registry.sh` with the following content:
+
+   ```bash
+   #!/bin/bash
+
+   set -e
+
+   PROJECT_ID=your-project-id
+   REPO_NAME=your-repo-name
+   REGION=us-central
+   SERVICE_ACCOUNT_NAME=artifact-registry-sa
+   NAMESPACE=linkerd-poc
+   REGISTRY_SECRET=artifact-registry-secret
+   DOCKER_SERVER=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME
+   SERVICE_ACCOUNT_EMAIL=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
+
+   # Create service account
+   gcloud iam service-accounts create $SERVICE_ACCOUNT_NAME \
+       --display-name "Service Account for Artifact Registry"
+
+   # Grant permissions
+   gcloud projects add-iam-policy-binding $PROJECT_ID \
+       --member serviceAccount:$SERVICE_ACCOUNT_EMAIL \
+       --role roles/artifactregistry.reader
+
+   # Create and download the key
+   gcloud iam service-accounts keys create ~/key.json \
+       --iam-account $SERVICE_ACCOUNT_EMAIL
+
+   # Create Kubernetes secret
+   kubectl create secret docker-registry $REGISTRY_SECRET \
+       --namespace $NAMESPACE \
+       --docker-server=$DOCKER_SERVER \
+       --docker-username=_json_key \
+       --docker-password="$(cat ~/key.json)" \
+       --docker-email=$SERVICE_ACCOUNT_EMAIL
+
+   # Annotate and patch the default service account
+   kubectl annotate serviceaccount default \
+       --namespace $NAMESPACE \
+       "kubernetes.io/service-account.name=$SERVICE_ACCOUNT_NAME" --overwrite
+
+   kubectl patch serviceaccount default \
+       --namespace $NAMESPACE \
+       -p "{\"imagePullSecrets\": [{\"name\": \"$REGISTRY_SECRET\"}]}"
+   ```
+
+2. **Make the Shell Script Executable:**
+
+   ```bash
+   chmod +x setup_registry.sh
+   ```
+
+3. **Update the `Makefile` to Call the Shell Script:**
+
+   Here’s the updated `Makefile`:
+
+   ### Updated Makefile
+
+   ```makefile
+   DOCKER_REG=your_dockerhub_username
+   IMAGE_NAME=helloworld
+   IMAGE_TAG=1.0
+   NAMESPACE=linkerd-poc
+   DEPLOYMENTS=helloworld1 helloworld2
+   REGISTRY_SECRET=artifact-registry-secret
+   REGION=us-central
+   PROJECT_ID=your-project-id
+   REPO_NAME=your-repo-name
+   SERVICE_ACCOUNT_NAME=artifact-registry-sa
+   DOCKER_SERVER=$(REGION)-docker.pkg.dev/$(PROJECT_ID)/$(REPO_NAME)
+
+   all: build push deploy-all
+
+   build:
+   	docker build -t $(DOCKER_REG)/$(IMAGE_NAME):$(IMAGE_TAG) .
+
+   push:
+   	docker push $(DOCKER_REG)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+   deploy-all: namespace registry $(DEPLOYMENTS)
+
+   namespace:
+   	kubectl apply -f kubernetes/namespace.yaml
+
+   registry: check-namespace
+   	./setup_registry.sh
+
+   docker-registry-secret: registry
+
+   helloworld1: docker-registry-secret
+   	kubectl apply -f kubernetes/helloworld1.yaml
+
+   helloworld2: docker-registry-secret
+   	kubectl apply -f kubernetes/helloworld2.yaml
+
+   deploy: registry check-namespace
+   	@$(foreach deployment, $(filter-out $@,$(MAKECMDGOALS)), \
+   		kubectl apply -f kubernetes/$(deployment).yaml;)
+
+   rollout:
+   	kubectl rollout restart deployment/$(deployment) -n $(NAMESPACE)
+
+   inspect:
+   	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\\.io/proxy-injector\\.linkerd\\.io/status}{"\n"}{end}'
+
+   clean:
+   	kubectl delete -f kubernetes/helloworld1.yaml || true \
+   	&& kubectl delete -f kubernetes/helloworld2.yaml || true \
+   	&& kubectl delete namespace $(NAMESPACE) || true
+
+   check-namespace:
+   	@if ! kubectl get namespace $(NAMESPACE) > /dev/null 2>&1; then \
+   		echo "Namespace $(NAMESPACE) does not exist. Please run 'make namespace' first."; \
+   		exit 1; \
+   	fi
+
+   # Prevent make from treating command line arguments as file names
+   %:
+   	@:
+   ```
+
+### Explanation
+
+1. **Shell Script (`setup_registry.sh`):**
+   - Uses the `PROJECT_ID`, `REPO_NAME`, and `REGION` variables to construct the `DOCKER_SERVER` URL.
+   - Handles the creation of the service account, granting permissions, creating and downloading the key, and setting up the Kubernetes secret and service account.
+
+2. **Updated `Makefile`:**
+   - The `DOCKER_SERVER` variable now correctly includes the `PROJECT_ID` and `REPO_NAME` along with the `REGION`.
+   - The `registry` target calls the `setup_registry.sh` script.
+   - The `docker-registry-secret` target depends on the `registry` target to ensure the setup is complete before proceeding.
+
+### Usage Instructions
+
+1. **Build and push the Docker image:**
+
+   ```bash
+   make build
+   make push
+   ```
+
+2. **Create the namespace:**
+
+   ```bash
+   make namespace
+   ```
+
+3. **Create the Docker registry secret:**
+
+   ```bash
+   make registry
+   ```
+
+4. **Deploy all Kubernetes resources:**
+
+   ```bash
+   make deploy-all
+   ```
+
+5. **Deploy a specific deployment:**
+
+   ```bash
+   make deploy helloworld1
+   ```
+
+6. **Rollout a specific deployment:**
+
+   ```bash
+   make rollout deployment=helloworld1
+   ```
+
+7. **Inspect deployments to confirm if Linkerd sidecar proxy was injected:**
+
+   ```bash
+   make inspect
+   ```
+
+8. **Clean up the resources:**
+
+   ```bash
+   make clean
+   ```
+
+This setup ensures that the `DOCKER_SERVER` includes the necessary `PROJECT_ID`, `REPO_NAME`, and `REGION`, and the registry-related tasks are decoupled from the `Makefile` and handled by the `setup_registry.sh` script. This makes the `Makefile` cleaner and more maintainable.
+
 
