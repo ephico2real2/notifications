@@ -335,7 +335,12 @@ check_envsubst() {
 check_envsubst
 
 # Load environment variables from .env file
-source .env
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | xargs)
+else
+  echo ".env file not found!"
+  exit 1
+fi
 
 # Substitute variables in helloworld1.yaml.template and apply
 envsubst < kubernetes/helloworld1.yaml.template | kubectl apply -f -
