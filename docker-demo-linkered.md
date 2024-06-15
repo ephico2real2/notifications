@@ -248,40 +248,46 @@ check-namespace:
 
 4. **`setup_dockerhub.sh`**
 
-    ```bash
-    #!/bin/bash
+```bash
+#!/bin/bash
 
-    set -e
+set -e
 
-    NAMESPACE=linkerd-poc
-    REGISTRY_SECRET=regcred
-    DOCKER_USERNAME=your_dockerhub_username
-    DOCKER_EMAIL=your_dockerhub_email
-    SERVICE_ACCOUNT_NAME=artifact-registry-ksa
+NAMESPACE=linkerd-poc
+REGISTRY_SECRET=regcred
+DOCKER_USERNAME=your_dockerhub_username
+DOCKER_EMAIL=your_dockerhub_email
+SERVICE_ACCOUNT_NAME=artifact-registry-ksa
 
-    # Prompt for Docker password
-    read -sp 'Enter Docker Hub password: ' DOCKER_PASSWORD
-    echo
+# Prompt for Docker password
+read -sp 'Enter Docker Hub password: ' DOCKER_PASSWORD
+echo
 
-    # Create Kubernetes secret for Docker Hub
-    if kubectl get secret $REGISTRY_SECRET -n $NAMESPACE > /dev/null 2>&1; then
-        kubectl delete secret $REGISTRY_SECRET -n $NAMESPACE
-    fi
+# Create Kubernetes secret for Docker Hub
+if kubectl get secret $REGISTRY_SECRET -n $NAMESPACE > /dev/null 2>&1; then
+    kubectl delete secret $REGISTRY_SECRET -n $NAMESPACE
+fi
 
-    kubectl create secret docker-registry $REGISTRY_SECRET \
-        --namespace $NAMESPACE \
-        --docker-username=$DOCKER_USERNAME \
-        --docker-password=$DOCKER_PASSWORD \
-        --docker-email=$DOCKER_EMAIL
+kubectl create secret docker-registry $REGISTRY_SECRET \
+    --namespace $NAMESPACE \
+    --docker-username=$DOCKER_USERNAME \
+    --docker-password=$DOCKER_PASSWORD \
+    --docker-email=$DOCKER_EMAIL
 
-    # Annotate and patch the specified service account
-    kubectl annotate serviceaccount $SERVICE_ACCOUNT_NAME \
-        --namespace $NAMESPACE \
-        "kubernetes.io/service-account.name=$SERVICE_ACCOUNT_NAME" --overwrite
+# Create the service account if it doesn't exist
+if ! kubectl get serviceaccount $SERVICE_ACCOUNT_NAME -n $NAMESPACE > /dev/null 2>&1; then
+    kubectl create serviceaccount $SERVICE_ACCOUNT_NAME --namespace $NAMESPACE
+fi
 
-    kubectl patch serviceaccount $SERVICE_ACCOUNT_NAME \
-        --namespace $NAMESPACE \
-        -p "{\"imagePullSecrets\": [{\"name\": \"$REGISTRY_SECRET\"}]}"
+# Annotate and patch the specified service account
+kubectl annotate serviceaccount $SERVICE_ACCOUNT_NAME \
+    --namespace $NAMESPACE \
+    "kubernetes.io/service-account.name=$SERVICE_ACCOUNT_NAME" --overwrite
+
+kubectl patch serviceaccount $SERVICE_ACCOUNT_NAME \
+    --namespace $NAMESPACE \
+    -p "{\"imagePullSecrets\": [{\"name\": \"$REGISTRY_SECRET\"}]}"
+
     ```
 
 5. **`cleanup_dockerhub.sh`**
@@ -304,7 +310,7 @@ check-namespace:
     kubectl patch serviceaccount $SERVICE_ACCOUNT_NAME \
         --namespace $NAMESPACE \
         -p "{\"imagePullSecrets\": null}"
-    ```
+```
 
 6. **`apply_deployments.sh`**
 
