@@ -284,9 +284,7 @@ set -e
 source .env
 
 # Substitute variables in helloworld1.yaml.template and apply
-envsubst < kubernetes/helloworld1.yaml.template | kub
-
-ectl apply -f -
+envsubst < kubernetes/helloworld1.yaml.template | kubectl apply -f -
 
 # Substitute variables in helloworld2.yaml.template and apply
 envsubst < kubernetes/helloworld2.yaml.template | kubectl apply -f -
