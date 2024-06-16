@@ -102,8 +102,10 @@ inspect:
 	done
 
 clean:
-	kubectl delete -f kubernetes/helloworld1.yaml || true \
-	&& kubectl delete -f kubernetes/helloworld2.yaml || true \
+	kubectl delete deployment helloworld1 -n $(NAMESPACE) || true \
+	&& kubectl delete deployment helloworld2 -n $(NAMESPACE) || true \
+	&& kubectl delete service helloworld1 -n $(NAMESPACE) || true \
+	&& kubectl delete service helloworld2 -n $(NAMESPACE) || true \
 	&& kubectl delete namespace $(NAMESPACE) || true
 
 clean-dockerhub:
