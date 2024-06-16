@@ -69,7 +69,7 @@ rollout:
 	@read -p "Enter deployment name to rollout: " deployment; \
 	kubectl rollout restart deployment/$$deployment -n $(NAMESPACE); \
 	echo "Waiting for pods to be ready..."; \
-	until kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; do \
+	until [ $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}' | grep -c True) -eq $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment --field-selector=status.phase=Running --no-headers | wc -l) ]; do \
 	  echo -n "."; \
 	  sleep 1; \
 	done; \
@@ -82,7 +82,7 @@ rolloutAll:
 	  echo "Rolling out $$deployment..."; \
 	  kubectl rollout restart deployment/$$deployment -n $(NAMESPACE); \
 	  echo "Waiting for pods to be ready for $$deployment..."; \
-	  until kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; do \
+	  until [ $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}' | grep -c True) -eq $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment --field-selector=status.phase=Running --no-headers | wc -l) ]; do \
 	    echo -n "."; \
 	    sleep 1; \
 	  done; \
@@ -91,7 +91,15 @@ rolloutAll:
 	done
 
 inspect:
-	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\.io/proxy-injector\.linkerd\.io/status}{"\n"}{end}'
+	@echo "Available deployments in namespace $(NAMESPACE):"
+	@kubectl get deployments -n $(NAMESPACE) -o custom-columns=NAME:.metadata.name
+	@read -p "Enter deployment name to inspect: " deployment; \
+	pod_names=$$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o jsonpath='{.items[*].metadata.name}'); \
+	for pod in $$pod_names; do \
+	  echo "Annotations for pod $$pod:"; \
+	  kubectl get pod $$pod -n $(NAMESPACE) -o json | jq '.metadata.annotations | {linkerd_inject: .["linkerd.io/inject"]}'; \
+	  echo; \
+	done
 
 clean:
 	kubectl delete -f kubernetes/helloworld1.yaml || true \
@@ -375,35 +383,8 @@ envsubst < kubernetes/helloworld2.yaml.template | kubectl apply -f -
 
 ```
 
-
 ############################
 ```
-rollout:
-	@echo "Available deployments in namespace $(NAMESPACE):"
-	@kubectl get deployments -n $(NAMESPACE) -o custom-columns=NAME:.metadata.name
-	@read -p "Enter deployment name to rollout: " deployment; \
-	kubectl rollout restart deployment/$$deployment -n $(NAMESPACE); \
-	echo "Waiting for pods to be ready..."; \
-	until [ $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}' | grep -c True) -eq $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment --field-selector=status.phase=Running --no-headers | wc -l) ]; do \
-	  echo -n "."; \
-	  sleep 1; \
-	done; \
-	echo "Pods in deployment $$deployment after rollout:"; \
-	kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o wide
-
-rolloutAll:
-	@echo "Rolling out all deployments in namespace $(NAMESPACE):"
-	@for deployment in $(shell kubectl get deployments -n $(NAMESPACE) -o jsonpath='{.items[*].metadata.name}'); do \
-	  echo "Rolling out $$deployment..."; \
-	  kubectl rollout restart deployment/$$deployment -n $(NAMESPACE); \
-	  echo "Waiting for pods to be ready for $$deployment..."; \
-	  until [ $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}' | grep -c True) -eq $$(kubectl get pods -n $(NAMESPACE) -l app=$$deployment --field-selector=status.phase=Running --no-headers | wc -l) ]; do \
-	    echo -n "."; \
-	    sleep 1; \
-	  done; \
-	  echo "Pods in deployment $$deployment after rollout:"; \
-	  kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o wide; \
-	done
 ```
 ---
 
