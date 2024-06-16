@@ -76,6 +76,20 @@ rollout:
 	echo "Pods in deployment $$deployment after rollout:"; \
 	kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o wide
 
+rolloutAll:
+	@echo "Rolling out all deployments in namespace $(NAMESPACE):"
+	@for deployment in $(shell kubectl get deployments -n $(NAMESPACE) -o jsonpath='{.items[*].metadata.name}'); do \
+	  echo "Rolling out $$deployment..."; \
+	  kubectl rollout restart deployment/$$deployment -n $(NAMESPACE); \
+	  echo "Waiting for pods to be ready for $$deployment..."; \
+	  until kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; do \
+	    echo -n "."; \
+	    sleep 1; \
+	  done; \
+	  echo "Pods in deployment $$deployment after rollout:"; \
+	  kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o wide; \
+	done
+
 inspect:
 	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\.io/proxy-injector\.linkerd\.io/status}{"\n"}{end}'
 
