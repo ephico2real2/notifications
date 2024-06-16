@@ -64,8 +64,12 @@ deploy: registry check-namespace
 
 
 rollout:
+	@echo "Available deployments in namespace $(NAMESPACE):"
+	@kubectl get deployments -n $(NAMESPACE) -o custom-columns=NAME:.metadata.name
 	@read -p "Enter deployment name to rollout: " deployment; \
-	kubectl rollout restart deployment/$$deployment -n $(NAMESPACE)
+	kubectl rollout restart deployment/$$deployment -n $(NAMESPACE); \
+	echo "Pods in deployment $$deployment after rollout:"; \
+	kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp
 
 inspect:
 	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\.io/proxy-injector\.linkerd\.io/status}{"\n"}{end}'
