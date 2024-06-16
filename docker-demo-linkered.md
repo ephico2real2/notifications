@@ -68,8 +68,13 @@ rollout:
 	@kubectl get deployments -n $(NAMESPACE) -o custom-columns=NAME:.metadata.name
 	@read -p "Enter deployment name to rollout: " deployment; \
 	kubectl rollout restart deployment/$$deployment -n $(NAMESPACE); \
+	echo "Waiting for pods to be ready..."; \
+	until kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q "True"; do \
+	  echo -n "."; \
+	  sleep 1; \
+	done; \
 	echo "Pods in deployment $$deployment after rollout:"; \
-	kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp
+	kubectl get pods -n $(NAMESPACE) -l app=$$deployment -o wide
 
 inspect:
 	kubectl get pods -n $(NAMESPACE) -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.annotations.linkerd\.io/proxy-injector\.linkerd\.io/status}{"\n"}{end}'
