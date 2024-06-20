@@ -245,7 +245,7 @@ Feel free to reach out if you have any questions or need further details about t
 
 This status report includes all the recent activities, highlights progress, and outlines the next steps while acknowledging the support and feedback from the team.
 
-
+```
 .
 ├── Makefile
 ├── scripts
@@ -273,3 +273,4 @@ This status report includes all the recent activities, highlights progress, and 
         └── addons.env
 
 
+```
