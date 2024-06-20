@@ -245,3 +245,31 @@ Feel free to reach out if you have any questions or need further details about t
 
 This status report includes all the recent activities, highlights progress, and outlines the next steps while acknowledging the support and feedback from the team.
 
+
+.
+├── Makefile
+├── scripts
+│   ├── validate.sh
+│   ├── prepare.sh
+│   ├── upgrade.sh
+│   ├── update_addons.sh
+│   ├── create_nodepool.sh
+│   ├── migrate_services.sh
+│   ├── cleanup_old_nodepool.sh
+│   ├── set_min_nodes.sh
+│   ├── restart_services.sh
+│   ├── restart_all_services.sh
+│   └── restart_vault.sh
+└── gke-clusters
+    └── prod-us-5g-udp2-1
+        ├── logs
+        ├── cluster-info.env
+        ├── services.env
+        └── addons.env
+    └── prod-us-5g-udp2-2
+        ├── logs
+        ├── cluster-info.env
+        ├── services.env
+        └── addons.env
+
+
